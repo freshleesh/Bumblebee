@@ -3,6 +3,7 @@ from ikpy.link import OriginLink, URDFLink
 import numpy as np
 import matplotlib.pyplot as plt
 import trajectory_planning as tp
+import time
 
 
 #링크의 집합으로 된 chain 생성
@@ -54,7 +55,17 @@ angles = arm_chain.inverse_kinematics(target_position, target_orientation, orien
 def move(angles):
     pass
 
-move(angles)
+start = [0, 0, 0, 0, 0]
+trajectory = []
+for angle, s in angles, start:
+    trajectory.append(tp.tp5(s, angle, 3, int(100/3)))
+start = angles
+
+for i in range(len(trajectory[0])):
+    angles = trajectory[:,i]
+    move(angles)
+    time.sleep(3/100)
+
 
 # pickup = tp.pickup_location(45, 6)
 # destination = tp.place_location(35, 4)
