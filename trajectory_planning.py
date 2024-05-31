@@ -49,7 +49,7 @@ def robot_chain():
         ),
         URDFLink(
         name="pen",
-        origin_translation=[0, 0, -5],
+        origin_translation=[5, 0, 0],
         origin_orientation=[0, 0, 0],
         rotation=[0, 0, 0],
         )
@@ -196,9 +196,9 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     # 로봇 모델 생성
     arm_chain = robot_chain()
 
-    target_orientation = [[1, 0, 0],
-                      [0, 1, 0],
-                      [0, 0, 1]] # 3x3 행렬
+    target_orientation = [[0, 0, 1],
+                          [0, 1, 0],
+                          [-1, 0, 0]] # 3x3 행렬
     
     joint_traj = []
 
@@ -212,13 +212,13 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     line = np.hstack((line,  zs))
 
     # line과 circle사이 잇는 trajectory 반원으로 만들었다.
-    b_start = circle[-1]
+    b_start = circle[0]
     b_end = line[0]
-    b_center = (b_start + b_end) / 2
+    b_center = (b_start + b_end) / 2.0
     r = b_start - b_center
     r = np.linalg.norm(r)
-    th = np.linspace(0, np.pi, fps * b_second)
-    z = np.sin(th) * r * 2 + z_pos
+    th = tp5_single(0, np.pi, b_second, fps)
+    z = np.sin(th) * r  + z_pos
     th2 = np.arctan2(b_end[1] - b_start[1], b_end[0] - b_start[0])
     x = r * np.cos(th) * np.sin(th2) + b_center[0]
     y = r * np.cos(th) * np.cos(th2) + b_center[1]
@@ -228,6 +228,9 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
     # 모드 별 카테시안 생성
     if mode == 0:
+        print('circle', circle[0])
+        print('bs', b_start)
+        print('bridge', bridge[0])
         cartesian_traj = np.vstack((circle, bridge, line))
     elif mode == 1:
         cartesian_traj = circle
@@ -262,7 +265,7 @@ if __name__ == "__main__":
     # destination = place_location(35, 4)
     fps = 40
     st = time.time()
-    drawing_traj, ctraj = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8,-2], radius=4, c_second=3, start=[11.25, -3.75], end=[7, 5], l_second=3, z_pos=0, mode = 0, s_second=5, e_second=5, b_second=3)
+    drawing_traj, ctraj = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=3, start=[7+6, 5], end=[11.25+6, -3.75], l_second=3, z_pos=0, mode = 0, s_second=5, e_second=5, b_second=3)
     print('time: ', time.time() - st)
     arm_chain = robot_chain()
     
