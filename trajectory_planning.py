@@ -17,32 +17,43 @@ def robot_chain():
         origin_orientation=[0, 0, 0],
         #링크의 회전 방향
         rotation=[0, 0, 1],
+        #제약사항
+        bounds=(-3.14, 3.14)
         ),
         URDFLink(
         name="link_1",
         origin_translation=[0, 0, 11.3],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
+        bounds =(-3.14, 0.01)
         ),
         URDFLink(
         name="link_2",
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
+        bounds =(-3.14, 0.01)
         ),
         URDFLink(
         name="link_3",
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
+        bounds =(-0.01, 3.14)
         ),
         URDFLink(
         name="link_4",
-        origin_translation=[0, 0, 5],
+        origin_translation=[0, 4, 0],
+        origin_orientation=[0, 0, 0],
+        rotation=[0, 0, 0],
+        ),
+        URDFLink(
+        name="pen",
+        origin_translation=[0, 0, -5],
         origin_orientation=[0, 0, 0],
         rotation=[0, 0, 0],
         )
-    ])
+    ], active_links_mask=[True, True, True, True, False, False])
     return arm_chain
 
 
@@ -79,11 +90,21 @@ def tp5(start, end, duration, fps):
     
     return angles
 
-def draw_circle(center, radius, num_of_point):
+def tp5_single(start, end, duration, fps):
+    c5 = (end - start) / (duration**5/120)
+    c0 = start
+    t = np.linspace(0, duration, fps * duration)
+    f = np.array([c5/20, -c5*duration/8, c5*duration*duration/12, 0, 0, c0])
+    angles = np.polyval(f, t)
+
+    return angles
+
+def draw_circle(center, radius, fps, duration):
     # 중심 위치 [x, y], 반지름, 점 개수
     
     # 원을 이루는 각 0 ~ 2pi까지 생성
-    theta = np.linspace(0, 2*np.pi, num_of_point)
+    theta = tp5_single(0, 2*np.pi, duration, fps)
+    # theta = np.linspace(0, 2*np.pi, num_of_point)
 
     # theta를 매개변수로 하는 원의 궤도 return  [ [x, x, x], [y, y, y] ]
     circle = np.array([center[0] + radius * np.cos(theta), center[1] + radius * np.sin(theta)])
@@ -93,12 +114,12 @@ def draw_circle(center, radius, num_of_point):
     return circle
 
 
-def draw_line(start, end, num_of_point):
+def draw_line(start, end, fps, duration):
     #시작, 끝 점 좌표 [x,y], 점 개수
 
     # start부터 end까지 linear하게 쪼개기
-    x = np.linspace(start[0], end[0], num_of_point) 
-    y = np.linspace(start[1], end[1], num_of_point) 
+    x = tp5_single(start[0], end[0], duration, fps) 
+    y = tp5_single(start[1], end[1], duration, fps) 
 
     # return  [ [x, x, x], [y, y, y] ]
     line = np.array([x, y])
@@ -182,8 +203,8 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     joint_traj = []
 
     # waypoint 생성
-    circle = draw_circle(center, radius, fps * c_second)
-    line = draw_line(start, end, fps * l_second)
+    circle = draw_circle(center, radius, fps, c_second)
+    line = draw_line(start, end, fps, l_second)
 
     # z값 추가
     zs = np.ones((fps * c_second, 1)) * z_pos
@@ -197,7 +218,7 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     r = b_start - b_center
     r = np.linalg.norm(r)
     th = np.linspace(0, np.pi, fps * b_second)
-    z = np.sin(th) * r + z_pos
+    z = np.sin(th) * r * 2 + z_pos
     th2 = np.arctan2(b_end[1] - b_start[1], b_end[0] - b_start[0])
     x = r * np.cos(th) * np.sin(th2) + b_center[0]
     y = r * np.cos(th) * np.cos(th2) + b_center[1]
@@ -239,10 +260,13 @@ if __name__ == "__main__":
     # line = draw_line([0, 0], [5, 5], 1000)
     # pickup = pickup_location(45, 6.5)
     # destination = place_location(35, 4)
-    
+    fps = 40
     st = time.time()
-    drawing_traj, ctraj = tp_m1([0,0,0,0,0], 40, [5,5], [3], 10, [3, 10], [6, -10], 10, 2, 0, 5, 5, 3)
+    drawing_traj, ctraj = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8,-2], radius=4, c_second=3, start=[11.25, -3.75], end=[7, 5], l_second=3, z_pos=0, mode = 0, s_second=5, e_second=5, b_second=3)
     print('time: ', time.time() - st)
+    arm_chain = robot_chain()
+    
+
 
     #시각화
     fig = plt.figure()
@@ -253,7 +277,30 @@ if __name__ == "__main__":
     ax.set_ylabel('y')
     ax.set_zlim(0, 50)
 
-    ax.scatter(ctraj[:,0], ctraj[:,1], ctraj[:,2])
+    start_time = time.time()
+    points = []
+    # ex_angles = 
+    for i, angles in enumerate(drawing_traj):
+        ax.clear()
+        ax.set_xlim(0, 40)
+        ax.set_xlabel('x')
+        ax.set_ylim(-20, 20)
+        ax.set_ylabel('y')
+        ax.set_zlim(0, 50)
+        #명령 내리고
+        arm_chain.plot(angles, ax)
+        pose = arm_chain.forward_kinematics(angles)
+        points.append(pose[:,3])
+        points = np.array(points)
+        ax.plot3D(points[:,0] , points[:,1] , points[:,2] )
+        points = list(points)
+
+        #다음 명령 시간 될때까지 대기
+        while((time.time() - start_time) < 1/fps * (i+1)):
+            pass
+
+        plt.pause(1/fps)
+    # ax.scatter(ctraj[:,0], ctraj[:,1], ctraj[:,2])
     # ax.scatter(pickup[0], pickup[1], pickup[2])
     # ax.scatter(destination[:,0], destination[:,1], destination[:,2])
     # ax.plot3D(line[:,0], line[:,1], np.zeros(1000))
