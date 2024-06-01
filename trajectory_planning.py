@@ -6,9 +6,60 @@ from ikpy.chain import Chain
 from ikpy.link import OriginLink, URDFLink
 
 
-def robot_chain():
+def gripper_chain():
+    # 그리퍼 달린 로봇 체인 생성
+    gripper_chain = Chain(name='left_arm', links=[
+        URDFLink(
+        name="link_0",
+        #해당 링크의 끝점 (dh파라미터에서 z축 위치) (모터의 시작점)
+        origin_translation=[0, 0, 0],
+        #그 다음 링크를 얼마나 회전해서 연결할 것인가 (그냥 0 0 0하면 됨)
+        origin_orientation=[0, 0, 0],
+        #링크의 회전 방향
+        rotation=[0, 0, 1],
+        #제약사항
+        bounds=(-3.14, 3.14)
+        ),
+        URDFLink(
+        name="link_1",
+        origin_translation=[0, 0, 11.3],
+        origin_orientation=[0, 0, 0],
+        rotation=[0, -1, 0],
+        bounds =(0, 3.14)
+        ),
+        URDFLink(
+        name="link_2",
+        origin_translation=[0, 0, 13.0],
+        origin_orientation=[0, 0, 0],
+        rotation=[0, -1, 0],
+        bounds =(-3.14, 0)
+        ),
+        URDFLink(
+        name="link_3",
+        origin_translation=[0, 0, 13.0],
+        origin_orientation=[0, 0, 0],
+        rotation=[0, -1, 0],
+        bounds =(0, 3.14)
+        ),
+        URDFLink(
+        name="gripper_body",
+        origin_translation=[0, 0, 5.2],
+        origin_orientation=[0, 0, 0],
+        rotation=[0, 0, 0],
+        ),
+        URDFLink(
+        name="gripper",
+        origin_translation=[6.5, 0, 0],
+        origin_orientation=[0, 0, 0],
+        rotation=[0, 0, 0],
+        )
+
+    ], active_links_mask=[True, True, True, True, False, False])
+    return gripper_chain
+
+def pen_chain():
     #링크의 집합으로 된 chain 생성
-    arm_chain = Chain(name='left_arm', links=[
+    pen_chain = Chain(name='left_arm', links=[
         URDFLink(
         name="link_0",
         #해당 링크의 끝점 (dh파라미터에서 z축 위치) (모터의 시작점)
@@ -42,7 +93,7 @@ def robot_chain():
         bounds =(-0.01, 3.14)
         ),
         URDFLink(
-        name="link_4",
+        name="pen_holder",
         origin_translation=[0, 4, 0],
         origin_orientation=[0, 0, 0],
         rotation=[0, 0, 0],
@@ -53,11 +104,9 @@ def robot_chain():
         origin_orientation=[0, 0, 0],
         rotation=[0, 0, 0],
         )
+
     ], active_links_mask=[True, True, True, True, False, False])
-    return arm_chain
-
-
-
+    return pen_chain
 
 
 def tp5(start, end, duration, fps):
@@ -190,11 +239,76 @@ def place_location(yy, bb):
     return destination
 
 
+def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_second):
+    # 초기 각도, pick deg, pick dis, place deg, place dis, fps, midpoint z, ready, up, mid, down time
+    gripper_robot = gripper_chain()
+    target_orientation = [[0, 0, 1],
+                          [0, 1, 0],
+                          [-1, 0, 0]] # 3x3 행렬
+    # target_orientation = [[1, 0, 0],
+    #                       [0, 1, 0],
+    #                       [0, 0, 1]] # 3x3 행렬
+    
+    # way point 생성
+    pickup = pickup_location(xx, aa)
+    place = place_location(yy, bb)
+
+    # pick한곳에서 그대로 z값 들기
+    up_pos = np.array([pickup[0], pickup[1], z])
+
+    # place할 곳 공중
+    down_pos = np.array([place[0][0], place[0][1], z])
+
+    # way point들 joint space로 변환
+    pu_joint = gripper_robot.inverse_kinematics(pickup, target_orientation)
+    up_joint = gripper_robot.inverse_kinematics(up_pos)
+    dw_joint = gripper_robot.inverse_kinematics(down_pos)
+
+    # way point들 사이에 traj planning
+    start_up_traj = tp5(start_angle, up_joint, r_second, fps)
+    up_start_traj = tp5(up_joint, start_angle, r_second, fps)
+    pickup_up_traj = tp5(pu_joint, up_joint, u_second, fps)
+    up_pickup_traj = tp5(up_joint, pu_joint, u_second, fps)
+    up_down_traj = tp5(up_joint, dw_joint, m_second, fps)
+    down_up_traj = tp5(dw_joint, up_joint, m_second, fps)
+
+    joint_traj = start_up_traj
+
+    for box in place:
+        bx_joint = gripper_robot.inverse_kinematics(box, target_orientation)
+        down_box_traj = tp5(dw_joint, bx_joint, d_second, fps)
+        box_down_traj = tp5(bx_joint, dw_joint, d_second, fps)
+        
+        # traj 연결
+        joint_traj = np.vstack((joint_traj, up_pickup_traj, pickup_up_traj, up_down_traj, down_box_traj, box_down_traj, down_up_traj))
+
+    joint_traj = np.vstack((joint_traj, up_start_traj))
+
+    #시각화를 위한 정기구학
+    end_pose = gripper_robot.forward_kinematics(start_angle)
+    cartesian_traj = end_pose[:, 3]
+    for angles in joint_traj:
+        end_pose = gripper_robot.forward_kinematics(angles)
+        cartesian_traj = np.vstack((cartesian_traj, end_pose[:,3]))
+
+    # 각속도 변환
+    omega = np.diff(joint_traj) * fps
+    omega = np.vstack((omega[0], omega))
+
+    return joint_traj, cartesian_traj, omega
+
+
+    
+
+
+
+
+
 def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_pos, mode, s_second, e_second, b_second):
     #초기 각도, 초당 명령 개수, 원 중심점, 반지름, 원 그리는 시간, 직선 시작점, 끝점, 직선 그리는 시간, 그리퍼 높이, mode 0: 둘 다 그리기. mode 1: 원만 그리기, mode 2: 선만 그리기, 그리기 시작점까지 이동시간, 복귀 시간, 브릿지 시간
 
     # 로봇 모델 생성
-    arm_chain = robot_chain()
+    pen_robot = pen_chain()
 
     target_orientation = [[0, 0, 1],
                           [0, 1, 0],
@@ -207,9 +321,10 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     line = draw_line(start, end, fps, l_second)
 
     # z값 추가
-    zs = np.ones((fps * c_second, 1)) * z_pos
-    circle = np.hstack((circle, zs))
-    line = np.hstack((line,  zs))
+    zs1 = np.ones((fps * c_second, 1)) * z_pos
+    circle = np.hstack((circle, zs1))
+    zs2 = np.ones((fps * l_second, 1)) * z_pos
+    line = np.hstack((line,  zs2))
 
     # line과 circle사이 잇는 trajectory 반원으로 만들었다.
     b_start = circle[0]
@@ -227,9 +342,6 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
     # 모드 별 카테시안 생성
     if mode == 0:
-        print('circle', circle[0])
-        print('bs', b_second)
-        print('bridge', bridge[0])
         cartesian_traj = np.vstack((circle, bridge, line))
     elif mode == 1:
         cartesian_traj = circle
@@ -238,35 +350,39 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     
     # 역기구학 계산
     for target_position in cartesian_traj:
-        joint_traj.append(arm_chain.inverse_kinematics(target_position, target_orientation, orientation_mode='all'))
+        # joint_traj.append(arm_chain.inverse_kinematics(target_position))
+        joint_traj.append(pen_robot.inverse_kinematics(target_position, target_orientation, orientation_mode='all'))
 
     # start_angle하고 연결
     to_start = tp5(start_angle, joint_traj[0], s_second, fps)
     to_end = tp5(joint_traj[-1], start_angle, e_second, fps)
     joint_traj = np.vstack((to_start, np.array(joint_traj), to_end))
 
+    # 각속도 값 생성
+    omega = np.diff(joint_traj) * fps
+
+    omega = np.vstack((omega[0], omega))
+    
+
     #시각화를 위한 정기구학
-    end_pose = arm_chain.forward_kinematics(start_angle)
+    end_pose = pen_robot.forward_kinematics(start_angle)
     cartesian_traj = end_pose[:, 3]
     for angles in joint_traj:
-        end_pose = arm_chain.forward_kinematics(angles)
+        end_pose = pen_robot.forward_kinematics(angles)
         cartesian_traj = np.vstack((cartesian_traj, end_pose[:,3]))
 
-    return joint_traj, cartesian_traj
+    return joint_traj, cartesian_traj, omega
 
 if __name__ == "__main__":
-    #예시
-    # th = tp5([0, 10], [10, 0], 10, 10)
-    # # print(th)
-    # circle = draw_circle([5, 5], 1, 1000)
-    # line = draw_line([0, 0], [5, 5], 1000)
-    # pickup = pickup_location(45, 6.5)
-    # destination = place_location(35, 4)
-    fps = 40
+    
+    fps = 10
     st = time.time()
-    drawing_traj, ctraj = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=1, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
-    print('time: ', time.time() - st)
-    arm_chain = robot_chain()
+
+    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=10, yy=35, bb=4, fps=fps, z= 30, r_second=3, u_second=1, m_second=1, d_second=1) 
+    # drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
+    print('planning time: ', time.time() - st)
+    robot = gripper_chain()
+    # robot = pen_chain()
     
 
 
@@ -281,7 +397,6 @@ if __name__ == "__main__":
 
     start_time = time.time()
     points = []
-    # ex_angles = 
     for i, angles in enumerate(drawing_traj):
         ax.clear()
         ax.set_xlim(0, 40)
@@ -290,23 +405,20 @@ if __name__ == "__main__":
         ax.set_ylabel('y')
         ax.set_zlim(0, 50)
         #명령 내리고
-        arm_chain.plot(angles, ax)
-        pose = arm_chain.forward_kinematics(angles)
+        robot.plot(angles, ax)
+        pose = robot.forward_kinematics(angles)
         points.append(pose[:,3])
         points = np.array(points)
         ax.plot3D(points[:,0] , points[:,1] , points[:,2] )
         points = list(points)
 
         #다음 명령 시간 될때까지 대기
-        while((time.time() - start_time) < 1/fps * (i+1)):
-            pass
+        next_time = start_time + (i + 1) * (1 / fps)
+        time.sleep(max(0, next_time - time.time()))
 
         plt.pause(1/fps)
-    # ax.scatter(ctraj[:,0], ctraj[:,1], ctraj[:,2])
-    # ax.scatter(pickup[0], pickup[1], pickup[2])
-    # ax.scatter(destination[:,0], destination[:,1], destination[:,2])
-    # ax.plot3D(line[:,0], line[:,1], np.zeros(1000))
-    # ax.plot3D(circle[:,0], circle[:,1], np.zeros(1000))
+    print("operating time:", time.time() - start_time)
+
     plt.show()
 
 
