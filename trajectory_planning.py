@@ -280,7 +280,7 @@ def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_s
         box_down_traj = tp5(bx_joint, dw_joint, d_second, fps)
         
         # traj 연결
-        joint_traj = np.vstack((joint_traj, up_pickup_traj, pickup_up_traj, up_down_traj, down_box_traj, box_down_traj, down_up_traj))
+        joint_traj = np.vstack((joint_traj, up_pickup_traj, np.array([0,0,0,0,0,'grip']),  pickup_up_traj, up_down_traj, down_box_traj, np.array([0,0,0,0,0,'drop']), box_down_traj, down_up_traj))
 
     joint_traj = np.vstack((joint_traj, up_start_traj))
 
@@ -326,19 +326,53 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     zs2 = np.ones((fps * l_second, 1)) * z_pos
     line = np.hstack((line,  zs2))
 
-    # line과 circle사이 잇는 trajectory 반원으로 만들었다.
-    b_start = circle[0]
-    b_end = line[0]
-    b_center = (b_start + b_end) / 2.0
-    r = b_start - b_center
-    r = np.linalg.norm(r)
-    th = tp5_single(0, np.pi, b_second, fps)
-    z = np.sin(th) * r *2  + z_pos
-    x = tp5_single(b_start[0], b_end[0], b_second, fps)
-    y = tp5_single(b_start[1], b_end[1], b_second, fps)
 
-    bridge = np.array([x, y, z])
-    bridge = bridge.transpose()
+    # =====================직사각형=======================
+
+    circle_above = np.array([circle[-1,0],circle[-1,1],circle[-1,2] + 3])
+    # 끝날떄도
+    line_above = np.array([line[0,0],line[0,1],line[0,2] + 3])
+
+    # 수직점 직선으로 연결
+    circle_high = tp5(circle[-1], circle_above, 1, fps)
+    high_high = tp5(circle_above, line_above, 1, fps)
+    line_hight = tp5(line_above, line[0], 1, fps)
+
+    bridge = np.vstack((circle_high, high_high, line_hight))
+
+    # 직사각형 올라가기
+    # z0 = np.linspace(circle[0,2], circle[0,2]+3, fps)
+    # x0 = circle[0,1]*fps
+    # y0 = circle[0,2]*fps
+
+    # # 직사각형 이동하기
+    # x1 = np.linspace(circle[-1,0], line[0,0], fps)
+    # y1 = np.linspace(circle[-1,1], line[0,1], 1, fps)
+    # z1 = z0[-1] * fps
+
+    # # 직사각형 내려가기
+    # z2 = np.linspace(line[0,2]+3, line[0,2], fps)
+    # x2 = line[0,1]*fps
+    # y2 = line[0,2]*fps
+
+    # x = np.hstack((x0, x1, x2))
+    # y = np.hstack((y0, y1, y2))
+    # z = np.hstack((z0, z1, z2))
+
+    # ======================반원======================
+    # line과 circle사이 잇는 trajectory 반원으로 만들었다.
+    # b_start = circle[0]
+    # b_end = line[0]
+    # b_center = (b_start + b_end) / 2.0
+    # r = b_start - b_center
+    # r = np.linalg.norm(r)
+    # th = tp5_single(0, np.pi, b_second, fps)
+    # z = np.sin(th) * r *2  + z_pos
+    # x = tp5_single(b_start[0], b_end[0], b_second, fps)
+    # y = tp5_single(b_start[1], b_end[1], b_second, fps)
+    # print(x,y,z)
+    # bridge = np.array([x, y, z])
+    # bridge = bridge.transpose()
 
     # 모드 별 카테시안 생성
     if mode == 0:
@@ -347,7 +381,22 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
         cartesian_traj = circle
     else:
         cartesian_traj = line
+    print(circle, bridge, line)
+    # 그리기 시작할때 수직으로 접근하기
+    start_above = np.array([cartesian_traj[0,0],cartesian_traj[0,1],cartesian_traj[0,2] + 3])
+    # 끝날떄도
+    end_above = np.array([cartesian_traj[-1,0],cartesian_traj[-1,1],cartesian_traj[-1,2] + 3])
+
+    # 수직점 직선으로 연결
+    start_pos = tp5(start_above, cartesian_traj[0], 1, fps)
+    end_pos = tp5(cartesian_traj[-1], end_above, 1, fps)
+
+    # print(start_pos)
     
+    cartesian_traj = np.vstack((start_pos, cartesian_traj, end_pos))
+
+    # print(cartesian_traj)
+
     # 역기구학 계산
     for target_position in cartesian_traj:
         # joint_traj.append(arm_chain.inverse_kinematics(target_position))
@@ -378,11 +427,11 @@ if __name__ == "__main__":
     fps = 10
     st = time.time()
 
-    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=10, yy=35, bb=4, fps=fps, z= 30, r_second=3, u_second=1, m_second=1, d_second=1) 
-    # drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
+    # drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=10, yy=35, bb=4, fps=fps, z= 30, r_second=3, u_second=1, m_second=1, d_second=1) 
+    drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
     print('planning time: ', time.time() - st)
-    robot = gripper_chain()
-    # robot = pen_chain()
+    # robot = gripper_chain()
+    robot = pen_chain()
     
 
 
@@ -398,13 +447,21 @@ if __name__ == "__main__":
     start_time = time.time()
     points = []
     for i, angles in enumerate(drawing_traj):
+
+        # #명령 내리고
+        # if angles[-1] =="grip":
+        #     print("grip")
+        #     time.sleep(1)
+        # elif angles[-1] == "drop":
+        #     print("drop")
+        #     time.sleep(1)
+        # else:
         ax.clear()
         ax.set_xlim(0, 40)
         ax.set_xlabel('x')
         ax.set_ylim(-20, 20)
         ax.set_ylabel('y')
         ax.set_zlim(0, 50)
-        #명령 내리고
         robot.plot(angles, ax)
         pose = robot.forward_kinematics(angles)
         points.append(pose[:,3])
