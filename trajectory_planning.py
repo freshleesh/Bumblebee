@@ -152,7 +152,7 @@ def draw_circle(center, radius, fps, duration):
     # 중심 위치 [x, y], 반지름, 점 개수
     
     # 원을 이루는 각 0 ~ 2pi까지 생성
-    theta = tp5_single(0, 2*np.pi, duration, fps)
+    theta = tp5_single(0, 2.1*np.pi, duration, fps)
     # theta = np.linspace(0, 2*np.pi, num_of_point)
 
     # theta를 매개변수로 하는 원의 궤도 return  [ [x, x, x], [y, y, y] ]
