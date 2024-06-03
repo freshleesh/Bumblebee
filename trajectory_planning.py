@@ -22,24 +22,24 @@ def gripper_chain():
         ),
         URDFLink(
         name="link_1",
-        origin_translation=[0, 0, 11.3],
+        origin_translation=[0, 0, 11.3-10], # 여기를 짧게 하니까 수직으로 잘 감
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(0, 3.14)
+        bounds =(-3.14, 3.14)
         ),
         URDFLink(
         name="link_2",
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, 0)
+        bounds =(-3.14, 0.1)
         ),
         URDFLink(
         name="link_3",
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(0, 3.14)
+        bounds =(-0.1, 3.14)
         ),
         URDFLink(
         name="gripper_body",
@@ -195,41 +195,50 @@ def place_location(yy, bb):
     # 베이스 높이 7cm
     # 큐브 정 중앙 위치
 
-    # 결과를 담을 행렬
-    destination = []
-
     #블럭 사이 간격
     delta = 0.4
 
     # 1층 블럭
+    first_floor = []
     for i in range(4):
         # 블럭 크기 2.5 ^ 3
         x = np.sin(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
         y = np.cos(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
         z = 7 + 2.5 / 2 
 
-        destination.append([x, y, z])
+        first_floor.append([x, y, z])
+    first_floor.reverse()
+
+    destination = first_floor
 
     # 2층 블럭
+    second_floor = []
     for i in range(3):
-        x = (destination[i][0] + destination[i+1][0])/2
-        y = (destination[i][1] + destination[i+1][1])/2
-        z = destination[i][2] + 2.5 
+        x = (first_floor[i][0] + first_floor[i+1][0])/2
+        y = (first_floor[i][1] + first_floor[i+1][1])/2
+        z = first_floor[i][2] + 2.5 
 
-        destination.append([x, y, z])
+        second_floor.append([x, y, z])
+        # second_floor.reverse()
+
+    destination += second_floor
 
     # 3층 블럭
+    third_floor = []
     for i in range(2):
-        x = (destination[i+4][0] + destination[i+5][0])/2
-        y = (destination[i+4][1] + destination[i+5][1])/2
-        z = destination[i+4][2] + 2.5 
+        x = (second_floor[i][0] + second_floor[i+1][0])/2
+        y = (second_floor[i][1] + second_floor[i+1][1])/2
+        z = second_floor[i][2] + 2.5 
 
-        destination.append([x, y, z])
+        third_floor.append([x, y, z])
+        # third_floor.reverse()
+
+    destination += third_floor
 
     # 4층 블럭
-    x = (destination[-1][0] + destination[-2][0])/2
-    y = (destination[-1][1] + destination[-2][1])/2
-    z = destination[-1][2] + 2.5
+    x = (third_floor[-1][0] + third_floor[-2][0])/2
+    y = (third_floor[-1][1] + third_floor[-2][1])/2
+    z = third_floor[-1][2] + 2.5
 
     destination.append([x, y, z])
 
@@ -245,10 +254,7 @@ def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_s
     target_orientation = [[0, 0, 1],
                           [0, 1, 0],
                           [-1, 0, 0]] # 3x3 행렬
-    # target_orientation = [[1, 0, 0],
-    #                       [0, 1, 0],
-    #                       [0, 0, 1]] # 3x3 행렬
-    
+
     # way point 생성
     pickup = pickup_location(xx, aa)
     place = place_location(yy, bb)
@@ -280,16 +286,13 @@ def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_s
         box_down_traj = tp5(bx_joint, dw_joint, d_second, fps)
         
         # traj 연결
-        joint_traj = np.vstack((joint_traj, up_pickup_traj, np.array([0,0,0,0,0,'grip']),  pickup_up_traj, up_down_traj, down_box_traj, np.array([0,0,0,0,0,'drop']), box_down_traj, down_up_traj))
+        joint_traj = np.vstack((joint_traj, up_pickup_traj, np.array([100,100,100,100,100,100]), pickup_up_traj, up_down_traj, down_box_traj, np.array([-100,100,100,100,100,100]), box_down_traj, down_up_traj))
+
+        # joint_traj = np.vstack((joint_traj, up_pickup_traj, np.array([0,0,0,0,0,'grip']),  pickup_up_traj, up_down_traj, down_box_traj, np.array([0,0,0,0,0,'drop']), box_down_traj, down_up_traj))
 
     joint_traj = np.vstack((joint_traj, up_start_traj))
 
-    #시각화를 위한 정기구학
-    end_pose = gripper_robot.forward_kinematics(start_angle)
-    cartesian_traj = end_pose[:, 3]
-    for angles in joint_traj:
-        end_pose = gripper_robot.forward_kinematics(angles)
-        cartesian_traj = np.vstack((cartesian_traj, end_pose[:,3]))
+    cartesian_traj = np.zeros(1)
 
     # 각속도 변환
     omega = np.diff(joint_traj) * fps
@@ -340,25 +343,6 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
     bridge = np.vstack((circle_high, high_high, line_hight))
 
-    # 직사각형 올라가기
-    # z0 = np.linspace(circle[0,2], circle[0,2]+3, fps)
-    # x0 = circle[0,1]*fps
-    # y0 = circle[0,2]*fps
-
-    # # 직사각형 이동하기
-    # x1 = np.linspace(circle[-1,0], line[0,0], fps)
-    # y1 = np.linspace(circle[-1,1], line[0,1], 1, fps)
-    # z1 = z0[-1] * fps
-
-    # # 직사각형 내려가기
-    # z2 = np.linspace(line[0,2]+3, line[0,2], fps)
-    # x2 = line[0,1]*fps
-    # y2 = line[0,2]*fps
-
-    # x = np.hstack((x0, x1, x2))
-    # y = np.hstack((y0, y1, y2))
-    # z = np.hstack((z0, z1, z2))
-
     # ======================반원======================
     # line과 circle사이 잇는 trajectory 반원으로 만들었다.
     # b_start = circle[0]
@@ -381,7 +365,7 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
         cartesian_traj = circle
     else:
         cartesian_traj = line
-    print(circle, bridge, line)
+
     # 그리기 시작할때 수직으로 접근하기
     start_above = np.array([cartesian_traj[0,0],cartesian_traj[0,1],cartesian_traj[0,2] + 3])
     # 끝날떄도
@@ -399,7 +383,6 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
     # 역기구학 계산
     for target_position in cartesian_traj:
-        # joint_traj.append(arm_chain.inverse_kinematics(target_position))
         joint_traj.append(pen_robot.inverse_kinematics(target_position, target_orientation, orientation_mode='all'))
 
     # start_angle하고 연결
@@ -413,25 +396,24 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     omega = np.vstack((omega[0], omega))
     
 
-    #시각화를 위한 정기구학
-    end_pose = pen_robot.forward_kinematics(start_angle)
-    cartesian_traj = end_pose[:, 3]
-    for angles in joint_traj:
-        end_pose = pen_robot.forward_kinematics(angles)
-        cartesian_traj = np.vstack((cartesian_traj, end_pose[:,3]))
+   
 
     return joint_traj, cartesian_traj, omega
 
 if __name__ == "__main__":
     
-    fps = 10
+    fps = 15
     st = time.time()
+    
 
-    # drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=10, yy=35, bb=4, fps=fps, z= 30, r_second=3, u_second=1, m_second=1, d_second=1) 
-    drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
+    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 30, r_second=3, u_second=1, m_second=1, d_second=1) 
+    place = place_location(35,10)
+    pick = np.array(pickup_location(45,15))
+    # drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
+    
     print('planning time: ', time.time() - st)
-    # robot = gripper_chain()
-    robot = pen_chain()
+    robot = gripper_chain()
+    # robot = pen_chain()
     
 
 
@@ -444,37 +426,47 @@ if __name__ == "__main__":
     ax.set_ylabel('y')
     ax.set_zlim(0, 50)
 
+
     start_time = time.time()
     points = []
     for i, angles in enumerate(drawing_traj):
 
-        # #명령 내리고
-        # if angles[-1] =="grip":
-        #     print("grip")
-        #     time.sleep(1)
-        # elif angles[-1] == "drop":
-        #     print("drop")
-        #     time.sleep(1)
-        # else:
-        ax.clear()
-        ax.set_xlim(0, 40)
-        ax.set_xlabel('x')
-        ax.set_ylim(-20, 20)
-        ax.set_ylabel('y')
-        ax.set_zlim(0, 50)
-        robot.plot(angles, ax)
-        pose = robot.forward_kinematics(angles)
-        points.append(pose[:,3])
-        points = np.array(points)
-        ax.plot3D(points[:,0] , points[:,1] , points[:,2] )
-        points = list(points)
+        # 잡을 시간
+        if angles[0] > 50:
+            print("grip")
+            time.sleep(1)
 
-        #다음 명령 시간 될때까지 대기
-        next_time = start_time + (i + 1) * (1 / fps)
-        time.sleep(max(0, next_time - time.time()))
+        # 놓을 시간
+        elif angles[0] < -50:
+            print('drop')
+            time.sleep(1)
+        else:
+            ax.clear()
+            ax.set_xlim(0, 40)
+            ax.set_xlabel('x')
+            ax.set_ylim(-20, 20)
+            ax.set_ylabel('y')
+            ax.set_zlim(0, 40)
+            robot.plot(angles, ax)
+            # print(angles)
+            pose = robot.forward_kinematics(angles)
+            points.append(pose[:,3])
+            points = np.array(points)
+            ax.plot3D(points[:,0] , points[:,1] , points[:,2] )
+            points = list(points)
 
-        plt.pause(1/fps)
+            # =====box, pick
+            ax.scatter(place[:,0], place[:,1], place[:,2])
+            ax.scatter(pick[0], pick[1], pick[2])
+
+
+            #다음 명령 시간 될때까지 대기
+            next_time = start_time + (i + 1) * (1 / fps)
+            time.sleep(max(0, next_time - time.time()))
+
+            plt.pause(1/fps)
     print("operating time:", time.time() - start_time)
+    print("frame time: ",(time.time() - start_time)/fps)
 
     plt.show()
 
