@@ -22,7 +22,7 @@ def gripper_chain():
         ),
         URDFLink(
         name="link_1",
-        origin_translation=[0, 0, 11.3-10], # 여기를 짧게 하니까 수직으로 잘 감
+        origin_translation=[0, 0, 11.3 - 10], # 여기를 짧게 하니까 수직으로 잘 감
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
         bounds =(-3.14, 3.14)
@@ -207,7 +207,7 @@ def place_location(yy, bb):
         z = 7 + 2.5 / 2 
 
         first_floor.append([x, y, z])
-    first_floor.reverse()
+    # first_floor.reverse()
 
     destination = first_floor
 
@@ -455,7 +455,7 @@ if __name__ == "__main__":
             ax.plot3D(points[:,0] , points[:,1] , points[:,2] )
             points = list(points)
 
-            # =====box, pick
+            # =====box, pick====
             ax.scatter(place[:,0], place[:,1], place[:,2])
             ax.scatter(pick[0], pick[1], pick[2])
 
