@@ -22,10 +22,10 @@ def gripper_chain():
         ),
         URDFLink(
         name="link_1",
-        origin_translation=[0, 0, 11.3 - 10], # 여기를 짧게 하니까 수직으로 잘 감
+        origin_translation=[0, 0, 11.3], # 여기를 짧게 하니까 수직으로 잘 감
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, 3.14)
+        bounds =(-3.14/2, 3.14/2)
         ),
         URDFLink(
         name="link_2",
@@ -39,17 +39,17 @@ def gripper_chain():
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-0.1, 3.14)
+        bounds =(-3.14, 0.1)
         ),
         URDFLink(
         name="gripper_body",
-        origin_translation=[0, 0, 5.2],
+        origin_translation=[0, 0, 6.7],
         origin_orientation=[0, 0, 0],
         rotation=[0, 0, 0],
         ),
         URDFLink(
         name="gripper",
-        origin_translation=[6.5, 0, 0],
+        origin_translation=[0, 0, 0],
         origin_orientation=[0, 0, 0],
         rotation=[0, 0, 0],
         )
@@ -73,10 +73,10 @@ def pen_chain():
         ),
         URDFLink(
         name="link_1",
-        origin_translation=[0, 0, 11.3],
+        origin_translation=[0, 0, 11.3 - 10],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, 0.01)
+        bounds =(-3.14, -3.14/2)
         ),
         URDFLink(
         name="link_2",
@@ -90,7 +90,7 @@ def pen_chain():
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-0.01, 3.14)
+        bounds =(-3.14, 0.1)
         ),
         URDFLink(
         name="pen_holder",
@@ -207,7 +207,7 @@ def place_location(yy, bb):
         z = 7 + 2.5 / 2 
 
         first_floor.append([x, y, z])
-    # first_floor.reverse()
+    first_floor.reverse()
 
     destination = first_floor
 
@@ -251,46 +251,70 @@ def place_location(yy, bb):
 def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_second):
     # 초기 각도, pick deg, pick dis, place deg, place dis, fps, midpoint z, ready, up, mid, down time
     gripper_robot = gripper_chain()
-    target_orientation = [[0, 0, 1],
-                          [0, 1, 0],
-                          [-1, 0, 0]] # 3x3 행렬
+    target_orientation = [0, 0 ,-1]
 
     # way point 생성
     pickup = pickup_location(xx, aa)
     place = place_location(yy, bb)
 
-    # pick한곳에서 그대로 z값 들기
+    # pick할 곳 공중 waypoint
     up_pos = np.array([pickup[0], pickup[1], z])
+    
+    # place할 곳 공중 waypoints
+    down_poses = np.array([place[:,0], place[:,1], [z]*len(place)])
+    down_poses = down_poses.transpose()
 
-    # place할 곳 공중
-    down_pos = np.array([place[0][0], place[0][1], z])
+    # cartesian으로 planning할 부분 잇기    
+    pickup_up_ct = tp5(pickup, up_pos, u_second, fps)
+    up_pickup_ct = np.flip(pickup_up_ct, axis=0)
+
+    # down_box 는 3차원임 box가 여러개라
+    down_box_ct = []
+    for down, box in zip(down_poses, place):
+        down_box_ct.append(tp5(down, box, d_second, fps))
+    down_box_ct = np.array(down_box_ct)
 
     # way point들 joint space로 변환
-    pu_joint = gripper_robot.inverse_kinematics(pickup, target_orientation)
-    up_joint = gripper_robot.inverse_kinematics(up_pos)
-    dw_joint = gripper_robot.inverse_kinematics(down_pos)
+    # start - up
+    up_joint = gripper_robot.inverse_kinematics(up_pos, target_orientation, orientation_mode="Z")
+    start_up_joint = tp5(start_angle, up_joint, r_second, fps)
+    up_start_joint = np.flip(start_up_joint, axis=0)
 
-    # way point들 사이에 traj planning
-    start_up_traj = tp5(start_angle, up_joint, r_second, fps)
-    up_start_traj = tp5(up_joint, start_angle, r_second, fps)
-    pickup_up_traj = tp5(pu_joint, up_joint, u_second, fps)
-    up_pickup_traj = tp5(up_joint, pu_joint, u_second, fps)
-    up_down_traj = tp5(up_joint, dw_joint, m_second, fps)
-    down_up_traj = tp5(dw_joint, up_joint, m_second, fps)
+    # up - pickup
+    up_pickup_joint = []
+    for cat in up_pickup_ct:
+        up_pickup_joint.append(gripper_robot.inverse_kinematics(cat, target_orientation, 'Z'))
+    up_pickup_joint = np.array(up_pickup_joint)
+    pickup_up_joint = np.flip(up_pickup_joint, axis=0)
 
-    joint_traj = start_up_traj
+    # down 
+    down_joint = []
+    for down in down_poses:
+        down_joint.append(gripper_robot.inverse_kinematics(down, target_orientation, 'Z'))
+    down_joint = np.array(down_joint)
 
-    for box in place:
-        bx_joint = gripper_robot.inverse_kinematics(box, target_orientation)
-        down_box_traj = tp5(dw_joint, bx_joint, d_second, fps)
-        box_down_traj = tp5(bx_joint, dw_joint, d_second, fps)
-        
-        # traj 연결
-        joint_traj = np.vstack((joint_traj, up_pickup_traj, np.array([100,100,100,100,100,100]), pickup_up_traj, up_down_traj, down_box_traj, np.array([-100,100,100,100,100,100]), box_down_traj, down_up_traj))
+    # up - down 3차원
+    up_down_joint = []
+    for down in down_joint:
+        up_down_joint.append(tp5(up_joint, down, m_second, fps))
+    up_down_joint = np.array(up_down_joint)
+    down_up_joint = np.flip(up_down_joint, axis=1)
 
-        # joint_traj = np.vstack((joint_traj, up_pickup_traj, np.array([0,0,0,0,0,'grip']),  pickup_up_traj, up_down_traj, down_box_traj, np.array([0,0,0,0,0,'drop']), box_down_traj, down_up_traj))
+    # down - box 3차원
+    down_box_joint = []
+    for down_box in down_box_ct:
+        down_box_single_jt = []
+        for down_box_waypoint in down_box:
+            down_box_single_jt.append(gripper_robot.inverse_kinematics(down_box_waypoint, target_orientation, 'Z'))
+        down_box_joint.append(down_box_single_jt)
+    down_box_joint = np.array(down_box_joint)
+    box_down_joint = np.flip(down_box_joint, axis=1)
 
-    joint_traj = np.vstack((joint_traj, up_start_traj))
+    # joint space point 잇기
+    joint_traj = start_up_joint
+    for box_num, down_box_single_jt in enumerate(down_box_joint):
+        joint_traj = np.vstack((joint_traj, up_pickup_joint, np.array([100, 0, 0, 0, 0, 0]), pickup_up_joint, up_down_joint[box_num], down_box_single_jt, np.array([-100, 0, 0, 0, 0, 0]), box_down_joint[box_num], down_up_joint[box_num]))
+    joint_traj = np.vstack((joint_traj, up_start_joint))
 
     cartesian_traj = np.zeros(1)
 
@@ -301,21 +325,15 @@ def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_s
     return joint_traj, cartesian_traj, omega
 
 
-    
-
-
-
-
-
 def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_pos, mode, s_second, e_second, b_second):
     #초기 각도, 초당 명령 개수, 원 중심점, 반지름, 원 그리는 시간, 직선 시작점, 끝점, 직선 그리는 시간, 그리퍼 높이, mode 0: 둘 다 그리기. mode 1: 원만 그리기, mode 2: 선만 그리기, 그리기 시작점까지 이동시간, 복귀 시간, 브릿지 시간
 
     # 로봇 모델 생성
     pen_robot = pen_chain()
 
-    target_orientation = [[0, 0, 1],
+    target_orientation = [[1, 0, 0],
                           [0, 1, 0],
-                          [-1, 0, 0]] # 3x3 행렬
+                          [0, 0, -1]] # 3x3 행렬
     
     joint_traj = []
 
@@ -375,11 +393,9 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     start_pos = tp5(start_above, cartesian_traj[0], 1, fps)
     end_pos = tp5(cartesian_traj[-1], end_above, 1, fps)
 
-    # print(start_pos)
     
     cartesian_traj = np.vstack((start_pos, cartesian_traj, end_pos))
 
-    # print(cartesian_traj)
 
     # 역기구학 계산
     for target_position in cartesian_traj:
@@ -402,11 +418,11 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
 if __name__ == "__main__":
     
-    fps = 15
+    fps = 10
     st = time.time()
     
 
-    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 30, r_second=3, u_second=1, m_second=1, d_second=1) 
+    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 20, r_second=3, u_second=1, m_second=1, d_second=1) 
     place = place_location(35,10)
     pick = np.array(pickup_location(45,15))
     # drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
@@ -434,12 +450,11 @@ if __name__ == "__main__":
         # 잡을 시간
         if angles[0] > 50:
             print("grip")
-            time.sleep(1)
 
         # 놓을 시간
         elif angles[0] < -50:
             print('drop')
-            time.sleep(1)
+
         else:
             ax.clear()
             ax.set_xlim(0, 40)
@@ -448,7 +463,6 @@ if __name__ == "__main__":
             ax.set_ylabel('y')
             ax.set_zlim(0, 40)
             robot.plot(angles, ax)
-            # print(angles)
             pose = robot.forward_kinematics(angles)
             points.append(pose[:,3])
             points = np.array(points)
