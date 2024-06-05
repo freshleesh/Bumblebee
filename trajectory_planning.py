@@ -192,16 +192,21 @@ def pickup_location(xx, aa):
 def go_where(position, second, mode, fps):
     if mode == 'pen':
         robot = pen_chain()
-        target_orientation = [0, 0 ,-1]
-        angles = robot.inverse_kinematics(position, target_position=target_orientation, orientation_mode="X")
+        o_mode = 'X'
     else:
         robot = gripper_chain()
-        target_orientation = [0, 0 ,-1]
-        angles = robot.inverse_kinematics(position, target_position=target_orientation, orientation_mode="Z")
+        o_mode = 'Z'
 
-    traj = tp5([0,0,0,0,0,0], angles, second, fps)
+    target_above = [position[0], position[1], 20]
+    cat_traj = tp5(target_above, position, second, fps)
+    jot_traj = []
+    target_orientation = [0, 0 ,-1]
+    for t in cat_traj:
+        jot_traj.append(robot.inverse_kinematics(position, target_position=target_orientation, orientation_mode=o_mode))
+    to_above = tp5([0,0,0,0,0,0], jot_traj[0], second, fps)
+    jot_traj = to_above + jot_traj
 
-    return traj
+    return np.array(jot_traj)
 
 
 
