@@ -18,7 +18,7 @@ def gripper_chain():
         #링크의 회전 방향
         rotation=[0, 0, 1],
         #제약사항
-        bounds=(-3.14, 3.14)
+        bounds=(-3.14/2, 3.14/2)
         ),
         URDFLink(
         name="link_1",
@@ -32,7 +32,7 @@ def gripper_chain():
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, 0.1)
+        bounds =(-3.14 * 120/180, 0.1)
         ),
         URDFLink(
         name="link_3",
@@ -76,7 +76,7 @@ def pen_chain():
         origin_translation=[0, 0, 12],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, 0.01)
+        bounds =(-3.14, -3.14/2)
         ),
         URDFLink(
         name="link_2",
@@ -90,7 +90,7 @@ def pen_chain():
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-0.01, 3.14)
+        bounds =(-3.14, 0.1)
         ),
         URDFLink(
         name="pen_holder",
@@ -181,7 +181,7 @@ def pickup_location(xx, aa):
     # xx: deg, aa: cm
 
     # 삼각함수로 pick up 물체 정 중앙 위치
-    x = np.cos(np.deg2rad(xx)) * (aa + 2.2)
+    x = np.cos(np.deg2rad(xx)) * (aa + 3)
     y = np.sin(np.deg2rad(xx)) * (aa + 3)
     
     # 받침대 높이 + 큐브 높이 절반
@@ -189,14 +189,29 @@ def pickup_location(xx, aa):
 
     return [x, y, z]
 
+def go_where(position, second, mode, fps):
+    if mode == 'pen':
+        robot = pen_chain()
+        target_orientation = [0, 0 ,-1]
+        angles = robot.inverse_kinematics(position, target_position=target_orientation, orientation_mode="X")
+    else:
+        robot = gripper_chain()
+        target_orientation = [0, 0 ,-1]
+        angles = robot.inverse_kinematics(position, target_position=target_orientation, orientation_mode="Z")
 
-def place_location(yy, bb):
+    traj = tp5([0,0,0,0,0,0], angles, second, fps)
+
+    return traj
+
+
+
+def place_location(yy, bb, delta):
     # yy: deg, bb: cm     
     # 베이스 높이 7cm
     # 큐브 정 중앙 위치
 
     #블럭 사이 간격
-    delta = 0.4
+    delta = delta
 
     # 1층 블럭
     first_floor = []
@@ -204,7 +219,7 @@ def place_location(yy, bb):
         # 블럭 크기 2.5 ^ 3
         x = np.sin(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
         y = np.cos(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
-        z = 7 + 2.5 / 2 + 0.8
+        z = 7 + 2.5 / 2 + 0.5
 
         first_floor.append([x, y, z])
     first_floor.reverse()
@@ -216,7 +231,7 @@ def place_location(yy, bb):
     for i in range(3):
         x = (first_floor[i][0] + first_floor[i+1][0])/2
         y = (first_floor[i][1] + first_floor[i+1][1])/2
-        z = first_floor[i][2] + 2.5 + 0.15
+        z = first_floor[i][2] + 2.5 + 1
 
         second_floor.append([x, y, z])
         # second_floor.reverse()
@@ -248,14 +263,14 @@ def place_location(yy, bb):
     return destination
 
 
-def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_second):
-    # 초기 각도, pick deg, pick dis, place deg, place dis, fps, midpoint z, ready, up, mid, down time
+def tp_m2(start_angle, xx, aa, yy, bb, fps, z, r_second, u_second, m_second, d_second, delta = 0.4):
+    # 초기 각도, pick deg, pick dis, place deg, place dis, fps, midpoint z, ready, up, mid, down time, 블럭 사이 간격
     gripper_robot = gripper_chain()
     target_orientation = [0, 0 ,-1]
 
     # way point 생성
     pickup = pickup_location(xx, aa)
-    place = place_location(yy, bb)
+    place = place_location(yy, bb, delta=delta)
 
     # pick할 곳 공중 waypoint
     up_pos = np.array([pickup[0], pickup[1], z])
@@ -331,7 +346,9 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     # 로봇 모델 생성
     pen_robot = pen_chain()
 
-    target_orientation = [0, 0, -1] # 3x3 행렬
+    target_orientation = [[1, 0, 0],
+                          [0, 1, 0],
+                          [0, 0, -1]] # 3x3 행렬
     
     joint_traj = []
 
@@ -397,7 +414,7 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
     # 역기구학 계산
     for target_position in cartesian_traj:
-        joint_traj.append(pen_robot.inverse_kinematics(target_position, target_orientation, orientation_mode='X'))
+        joint_traj.append(pen_robot.inverse_kinematics(target_position, target_orientation, orientation_mode='all'))
 
     # start_angle하고 연결
     to_start = tp5(start_angle, joint_traj[0], s_second, fps)
@@ -420,14 +437,14 @@ if __name__ == "__main__":
     st = time.time()
     
 
-    # drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 20, r_second=3, u_second=1, m_second=1, d_second=1) 
-    # place = place_location(35,10)
-    # pick = np.array(pickup_location(45,15))
-    drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
+    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 30, r_second=1, u_second=1, m_second=1, d_second=1, delta = 0.1) 
+    place = place_location(35,10,0.1)
+    pick = np.array(pickup_location(45,15))
+    # drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
     
     print('planning time: ', time.time() - st)
-    #robot = gripper_chain()
-    robot = pen_chain()
+    robot = gripper_chain()
+    # robot = pen_chain()
     
 
 
@@ -468,8 +485,8 @@ if __name__ == "__main__":
             points = list(points)
 
             # =====box, pick====
-            #ax.scatter(place[:,0], place[:,1], place[:,2])
-            #ax.scatter(pick[0], pick[1], pick[2])
+            ax.scatter(place[:,0], place[:,1], place[:,2])
+            ax.scatter(pick[0], pick[1], pick[2])
 
 
             #다음 명령 시간 될때까지 대기
@@ -481,6 +498,7 @@ if __name__ == "__main__":
     print("frame time: ",(time.time() - start_time)/fps)
 
     plt.show()
+
 
 
 
