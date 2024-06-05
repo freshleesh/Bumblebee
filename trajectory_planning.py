@@ -76,7 +76,7 @@ def pen_chain():
         origin_translation=[0, 0, 12],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, -3.14/2)
+        bounds =(-3.14, 0.01)
         ),
         URDFLink(
         name="link_2",
@@ -90,7 +90,7 @@ def pen_chain():
         origin_translation=[0, 0, 13.0],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
-        bounds =(-3.14, 0.1)
+        bounds =(-0.01, 3.14)
         ),
         URDFLink(
         name="pen_holder",
@@ -204,7 +204,7 @@ def place_location(yy, bb):
         # 블럭 크기 2.5 ^ 3
         x = np.sin(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
         y = np.cos(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
-        z = 7 + 2.5 / 2 + 0.6
+        z = 7 + 2.5 / 2 + 0.8
 
         first_floor.append([x, y, z])
     first_floor.reverse()
@@ -216,7 +216,7 @@ def place_location(yy, bb):
     for i in range(3):
         x = (first_floor[i][0] + first_floor[i+1][0])/2
         y = (first_floor[i][1] + first_floor[i+1][1])/2
-        z = first_floor[i][2] + 2.5 + 0.3
+        z = first_floor[i][2] + 2.5 + 0.15
 
         second_floor.append([x, y, z])
         # second_floor.reverse()
@@ -331,9 +331,7 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
     # 로봇 모델 생성
     pen_robot = pen_chain()
 
-    target_orientation = [[1, 0, 0],
-                          [0, 1, 0],
-                          [0, 0, -1]] # 3x3 행렬
+    target_orientation = [0, 0, -1] # 3x3 행렬
     
     joint_traj = []
 
@@ -399,7 +397,7 @@ def tp_m1(start_angle, fps, center, radius, c_second, start, end, l_second, z_po
 
     # 역기구학 계산
     for target_position in cartesian_traj:
-        joint_traj.append(pen_robot.inverse_kinematics(target_position, target_orientation, orientation_mode='all'))
+        joint_traj.append(pen_robot.inverse_kinematics(target_position, target_orientation, orientation_mode='X'))
 
     # start_angle하고 연결
     to_start = tp5(start_angle, joint_traj[0], s_second, fps)
@@ -422,14 +420,14 @@ if __name__ == "__main__":
     st = time.time()
     
 
-    drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 20, r_second=3, u_second=1, m_second=1, d_second=1) 
-    place = place_location(35,10)
-    pick = np.array(pickup_location(45,15))
-    # drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
+    # drawing_traj, ctraj, omega = tp_m2(start_angle=[0,0,0,0,0,0], xx=45, aa=15, yy=35, bb=10, fps=fps, z= 20, r_second=3, u_second=1, m_second=1, d_second=1) 
+    # place = place_location(35,10)
+    # pick = np.array(pickup_location(45,15))
+    drawing_traj, ctraj, omega = tp_m1(start_angle=[0,0,0,0,0,0], fps=fps, center=[8+6,-2], radius=4, c_second=5, start=[7+6, 5], end=[11.25+6, -3.75], l_second=1, z_pos=0, mode = 0, s_second=3, e_second=3, b_second=1)
     
     print('planning time: ', time.time() - st)
-    robot = gripper_chain()
-    # robot = pen_chain()
+    #robot = gripper_chain()
+    robot = pen_chain()
     
 
 
@@ -470,8 +468,8 @@ if __name__ == "__main__":
             points = list(points)
 
             # =====box, pick====
-            ax.scatter(place[:,0], place[:,1], place[:,2])
-            ax.scatter(pick[0], pick[1], pick[2])
+            #ax.scatter(place[:,0], place[:,1], place[:,2])
+            #ax.scatter(pick[0], pick[1], pick[2])
 
 
             #다음 명령 시간 될때까지 대기
