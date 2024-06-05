@@ -22,7 +22,7 @@ def gripper_chain():
         ),
         URDFLink(
         name="link_1",
-        origin_translation=[0, 0, 11.3], # 여기를 짧게 하니까 수직으로 잘 감
+        origin_translation=[0, 0, 12], # 여기를 짧게 하니까 수직으로 잘 감
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
         bounds =(-3.14/2, 3.14/2)
@@ -73,7 +73,7 @@ def pen_chain():
         ),
         URDFLink(
         name="link_1",
-        origin_translation=[0, 0, 11.3 - 10],
+        origin_translation=[0, 0, 12],
         origin_orientation=[0, 0, 0],
         rotation=[0, -1, 0],
         bounds =(-3.14, -3.14/2)
