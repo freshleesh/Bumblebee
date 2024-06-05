@@ -62,7 +62,7 @@ def pen_chain():
     pen_chain = Chain(name='left_arm', links=[
         URDFLink(
         name="link_0",
-        #해당 링크의 끝점 (dh파라미터에서 z축 위치) (모터의 시작점)
+        #해당 링크의 끝점 (dh파라미터에서 z축 위치) (모터의 회전점)
         origin_translation=[0, 0, 0],
         #그 다음 링크를 얼마나 회전해서 연결할 것인가 (그냥 0 0 0하면 됨)
         origin_orientation=[0, 0, 0],
@@ -204,7 +204,7 @@ def place_location(yy, bb):
         # 블럭 크기 2.5 ^ 3
         x = np.sin(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
         y = np.cos(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
-        z = 7 + 2.5 / 2 
+        z = 7 + 2.5 / 2 + 0.5
 
         first_floor.append([x, y, z])
     first_floor.reverse()
@@ -216,7 +216,7 @@ def place_location(yy, bb):
     for i in range(3):
         x = (first_floor[i][0] + first_floor[i+1][0])/2
         y = (first_floor[i][1] + first_floor[i+1][1])/2
-        z = first_floor[i][2] + 2.5 
+        z = first_floor[i][2] + 2.5 + 1
 
         second_floor.append([x, y, z])
         # second_floor.reverse()
