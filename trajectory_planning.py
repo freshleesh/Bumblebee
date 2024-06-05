@@ -181,7 +181,7 @@ def pickup_location(xx, aa):
     # xx: deg, aa: cm
 
     # 삼각함수로 pick up 물체 정 중앙 위치
-    x = np.cos(np.deg2rad(xx)) * (aa + 3)
+    x = np.cos(np.deg2rad(xx)) * (aa + 2.2)
     y = np.sin(np.deg2rad(xx)) * (aa + 3)
     
     # 받침대 높이 + 큐브 높이 절반
@@ -204,7 +204,7 @@ def place_location(yy, bb):
         # 블럭 크기 2.5 ^ 3
         x = np.sin(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
         y = np.cos(np.deg2rad(180 - yy)) * (bb + 1.5 + delta * (i+1) + 2.5 / 2 + 2.5 * i)
-        z = 7 + 2.5 / 2 + 0.5
+        z = 7 + 2.5 / 2 + 0.6
 
         first_floor.append([x, y, z])
     first_floor.reverse()
@@ -216,7 +216,7 @@ def place_location(yy, bb):
     for i in range(3):
         x = (first_floor[i][0] + first_floor[i+1][0])/2
         y = (first_floor[i][1] + first_floor[i+1][1])/2
-        z = first_floor[i][2] + 2.5 + 1
+        z = first_floor[i][2] + 2.5 + 0.3
 
         second_floor.append([x, y, z])
         # second_floor.reverse()
@@ -483,7 +483,6 @@ if __name__ == "__main__":
     print("frame time: ",(time.time() - start_time)/fps)
 
     plt.show()
-
 
 
 
